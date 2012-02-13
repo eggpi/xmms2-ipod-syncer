@@ -44,8 +44,7 @@ xmmsv_error_from_GError (const gchar *format, GError **err)
     ret = xmmsv_new_error (errmsg);
 
     g_free (errmsg);
-    g_error_free (*err);
-    *err = NULL;
+    g_clear_error (err);
 
     return ret;
 }
