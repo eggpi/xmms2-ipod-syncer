@@ -261,8 +261,7 @@ sync_id_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 xmmsv_t *
 sync_idlist_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
-    xmmsv_t *idlist, *ret;
-    context_t *context = (context_t *) udata;
+    xmmsv_t *idlist;
 
     xmmsv_list_get (args, 0, &idlist);
     return sync_idlist (idlist, udata);
