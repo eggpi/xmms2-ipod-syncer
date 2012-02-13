@@ -223,7 +223,7 @@ sync_id (xmmsv_t *idv, context_t *context)
 xmmsv_t *
 sync_idlist (xmmsv_t *idl, context_t *context)
 {
-    GError *err;
+    GError *err = NULL;
     xmmsv_t *id, *ret = NULL;
     xmmsv_list_iter_t *it;
 
