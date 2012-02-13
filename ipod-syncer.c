@@ -127,6 +127,27 @@ remove_track (Itdb_Track *track, context_t *context)
 }
 
 /**
+ * Remove all tracks from the iPod.
+ * Playlists are kept, even if empty.
+ */
+void
+clear_tracks (context_t *context) {
+    GList *n, *next;
+    GError *err = NULL;
+
+    for (n = context->itdb->tracks; n; n = next) {
+        next = g_list_next (n);
+        remove_track (n->data, context);
+    }
+
+    if (!itdb_write (context->itdb, &err)) {
+        g_printf ("Can't write database: %s\n", err->message);
+    }
+
+    return;
+}
+
+/**
  * Internal, sync a track given by its id to the iPod.
  * It is the caller's responsibility to write the database back to the device.
  */
@@ -334,7 +355,7 @@ setup_service (context_t *context)
 int main(int argc, char **argv) {
     guint ret = 0;
     GError *err = NULL;
-    gboolean service = false;
+    gboolean service = false, clear = false;
     gchar *mountpoint = g_strdup (DEFAULT_MOUNTPOINT), *query = NULL;
     context_t context = {0};
 
@@ -343,6 +364,7 @@ int main(int argc, char **argv) {
         {"mountpoint", 'm', 0, G_OPTION_ARG_STRING, &mountpoint, "The mountpoint for the iPod. Default: " DEFAULT_MOUNTPOINT, NULL},
         {"service", 's', 0, G_OPTION_ARG_NONE, &service, "Run as a service.", NULL},
         {"verbose", 'v', 0, G_OPTION_ARG_NONE, &context.verbose, "Display more messages", NULL},
+        {"clear", 0, 0, G_OPTION_ARG_NONE, &clear, "Remove all tracks in the iPod", NULL},
         {NULL}
     };
 
@@ -356,8 +378,8 @@ int main(int argc, char **argv) {
         goto out;
     }
 
-    if (!(service || argc > 1)) {
-        g_printf ("Need either --service or a query string.\n");
+    if (!(service || argc > 1 || clear)) {
+        g_printf ("Need either --service, --clear or a query string.\n");
         ret = 1;
         goto out;
     }
@@ -375,6 +397,10 @@ int main(int argc, char **argv) {
         g_error_free (err);
         ret = 1;
         goto out;
+    }
+
+    if (clear) {
+        clear_tracks (&context);
     }
 
     if (argc > 1) {
