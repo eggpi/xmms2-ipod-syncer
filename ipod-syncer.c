@@ -1,6 +1,7 @@
 #include <itdb.h>
 #include <glib.h>
 #include <glib/gprintf.h>
+#include <glib/gstdio.h>
 #include <xmmsclient/xmmsclient.h>
 #include <xmmsclient/xmmsclient-glib.h>
 
@@ -94,6 +95,35 @@ filepath_from_medialib_info (xmmsv_t *info)
     g_free (decoded);
 
     return filepath;
+}
+
+/**
+ * Remove a track from the iPod.
+ * It is the caller's responsibility to write the database back
+ * to the device after calling this function.
+ */
+void
+remove_track (Itdb_Track *track, context_t *context)
+{
+    GList *n;
+    gchar *filepath;
+
+    if (context->verbose) {
+        g_printf ("Deleting track %s\n", track->title);
+    }
+
+    /* remove track from all playlists */
+    for (n = context->itdb->playlists; n; n = g_list_next (n)) {
+        itdb_playlist_remove_track ((Itdb_Playlist *) n->data, track);
+    }
+
+    filepath = itdb_filename_on_ipod (track);
+    g_remove (filepath);
+    g_free (filepath);
+
+    itdb_track_remove (track);
+
+    return;
 }
 
 /**
