@@ -224,16 +224,16 @@ xmmsv_t *
 sync_idlist (xmmsv_t *idl, context_t *context)
 {
     GError *err;
-    xmmsv_t *v, *ret = NULL;
+    xmmsv_t *id, *ret = NULL;
     xmmsv_list_iter_t *it;
 
     xmmsv_get_list_iter (idl, &it);
     while (xmmsv_list_iter_valid (it)) {
-        xmmsv_list_iter_entry (it, &v);
+        xmmsv_list_iter_entry (it, &id);
 
-        if ((v = sync_id (v, context))) {
+        if ((ret = sync_id (id, context))) {
             /* FIXME: nothing could ever go wrong! */
-            xmmsv_unref (v);
+            break;
         }
 
         xmmsv_list_iter_next (it);
