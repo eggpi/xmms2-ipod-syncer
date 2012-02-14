@@ -73,7 +73,6 @@ around as a service after running the query (if any).
 
 Glad you asked! There are plenty.
 
-- No checking for free space in the iPod;
 - No way to selectively remove tracks;
 - No checking if a track is already in the iPod before copying;
 - Probably some memory leaks;

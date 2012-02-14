@@ -133,8 +133,10 @@ remove_track (Itdb_Track *track, context_t *context)
     }
 
     filepath = itdb_filename_on_ipod (track);
-    g_remove (filepath);
-    g_free (filepath);
+    if (filepath) {
+        g_remove (filepath);
+        g_free (filepath);
+    }
 
     itdb_track_remove (track);
 
@@ -163,16 +165,16 @@ clear_tracks (context_t *context) {
 }
 
 /**
- * Internal, sync a track given by its id to the iPod.
+ * Internal, sync a track given by its medialib id to the iPod.
+ * Returns the newly created Itdb_Track, or NULL upon error.
  * It is the caller's responsibility to write the database back to the device.
  */
-xmmsv_t *
-sync_id (xmmsv_t *idv, context_t *context)
+Itdb_Track *
+sync_id (xmmsv_t *idv, context_t *context, GError **err)
 {
     gint32 id;
-    GError *err = NULL;
     xmmsc_result_t *res;
-    xmmsv_t *properties, *ret = NULL;
+    xmmsv_t *properties;
 
     Itdb_Track *track;
     Itdb_Playlist *mpl;
@@ -180,9 +182,11 @@ sync_id (xmmsv_t *idv, context_t *context)
     gchar *filepath;
 
     if (!xmmsv_get_int (idv, &id)) {
-        ret = xmmsv_new_error ("can't parse track id");
+        g_set_error_literal (err, 0, 0, "can't parse track id");
+        return NULL;
     } else if (id <= 0) {
-        ret = xmmsv_new_error ("invalid track id");
+        g_set_error_literal (err, 0, 0, "invalid track id");
+        return NULL;
     }
 
     track = itdb_track_new ();
@@ -202,10 +206,13 @@ sync_id (xmmsv_t *idv, context_t *context)
     itdb_playlist_add_track (mpl, track, -1);
 
     filepath = filepath_from_medialib_info (properties);
-    if (!filepath) {
-        ret = xmmsv_new_error ("can't determine path for track");
-    } else if (!itdb_cp_track_to_ipod (track, filepath, &err)) {
-        ret = xmmsv_error_from_GError ("can't copy track to iPod: %s", &err);
+    if (!filepath || !itdb_cp_track_to_ipod (track, filepath, err)) {
+        remove_track (track, context);
+        track = NULL;
+
+        if (!filepath) {
+            g_set_error_literal (err, 0, 0, "can't determine path for track");
+        }
     }
 
     g_free (filepath);
@@ -213,36 +220,43 @@ sync_id (xmmsv_t *idv, context_t *context)
     xmmsv_unref (properties);
     xmmsc_result_unref (res);
 
-    return ret;
+    return track;
 }
 
 /**
  * Internal, sync tracks identified by a list of ids.
+ * This function is atomic: either all or none of the tracks are synced.
  */
-xmmsv_t *
-sync_idlist (xmmsv_t *idl, context_t *context)
+gboolean
+sync_idlist (xmmsv_t *idl, context_t *context, GError **err)
 {
-    GError *err = NULL;
-    xmmsv_t *id, *ret = NULL;
+    Itdb_Track *t;
+    xmmsv_t *id;
     xmmsv_list_iter_t *it;
+    GList *n, *tracks = NULL;
 
     xmmsv_get_list_iter (idl, &it);
     while (xmmsv_list_iter_valid (it)) {
         xmmsv_list_iter_entry (it, &id);
 
-        if ((ret = sync_id (id, context))) {
-            /* FIXME: nothing could ever go wrong! */
+        if (!(t = sync_id (id, context, err))) {
             break;
         }
 
+        tracks = g_list_prepend (tracks, t);
         xmmsv_list_iter_next (it);
     }
 
-    if (!itdb_write (context->itdb, &err)) {
-        ret = xmmsv_error_from_GError ("can't write data: %s", &err);
+    if (!*err && itdb_write (context->itdb, err)) {
+        return true;
     }
 
-    return ret;
+    /* Something went wrong -- remove all tracks we copied */
+    for (n = tracks; n; n = g_list_next (n)) {
+        remove_track ((Itdb_Track *) n->data, context);
+    }
+
+    return false;
 }
 
 /**
@@ -252,17 +266,17 @@ sync_idlist (xmmsv_t *idl, context_t *context)
 xmmsv_t *
 sync_id_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
-    GError *err;
-    xmmsv_t *idv, *ret;
+    GError *err = NULL;
+    xmmsv_t *idv, *ret = NULL;
     context_t *context = (context_t *) udata;
 
     xmmsv_list_get (args, 0, &idv);
-    ret = sync_id (idv, udata);
+    sync_id (idv, udata, &err);
 
     /* sync_id doesn't write the contents of the db,
      * do it here if everything went well.
      */
-    if (!ret && !itdb_write (context->itdb, &err)) {
+    if (!err && !itdb_write (context->itdb, &err)) {
         ret = xmmsv_error_from_GError ("can't write data: %s", &err);
     }
 
@@ -276,10 +290,16 @@ sync_id_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 xmmsv_t *
 sync_idlist_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
-    xmmsv_t *idlist;
+    GError *err = NULL;
+    xmmsv_t *idlist, *ret = NULL;
 
     xmmsv_list_get (args, 0, &idlist);
-    return sync_idlist (idlist, udata);
+
+    if (!sync_idlist (idlist, udata, &err)) {
+        ret = xmmsv_error_from_GError ("can't sync tracks: %s", &err);
+    }
+
+    return ret;
 }
 
 /**
@@ -288,10 +308,11 @@ sync_idlist_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 void
 run_query (const gchar *query, context_t *context)
 {
-    xmmsv_t *idl, *err;
+    xmmsv_t *idl;
     xmmsc_result_t *res;
     xmmsv_coll_t *coll;
-    const gchar *errstr;
+    GError *err = NULL;
+    const char *errstr;
 
     if (!xmmsv_coll_parse (query, &coll)) {
         g_printf ("Failed to parse query.\n");
@@ -305,13 +326,9 @@ run_query (const gchar *query, context_t *context)
     if (xmmsv_get_error (idl, &errstr)) {
         g_printf ("Failed to get collection: %s\n", errstr);
     } else {
-        err = sync_idlist (idl, context);
-        if (err) {
-            if (xmmsv_get_error (err, &errstr)) {
-                g_printf ("Failed to sync tracks: %s\n", errstr);
-            }
-
-            xmmsv_unref (err);
+        if (!sync_idlist (idl, context, &err)) {
+            g_printf ("Failed to sync tracks: %s\n", err->message);
+            g_clear_error (&err);
         }
     }
 
