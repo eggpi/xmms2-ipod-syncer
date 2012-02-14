@@ -62,6 +62,7 @@ The client currently exports two methods:
 **sync_idlist (idlist)**
 
         Sync a list of medialib ids.
+        Either all tracks are synced, or none of them is.
 
         Expects a single positional argument, a list of medialib ids.
         Returns NONE or ERROR.
