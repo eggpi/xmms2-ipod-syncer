@@ -50,21 +50,14 @@ There are a few other options, which you can read about using:
 
 ### as a service client
 
-The client currently exports two methods:
+The client currently exports a single method:
 
-**sync (id)**
+**sync (id1, id2, ...)**
 
-        Sync an individual track given by its medialib id.
+        Sync tracks given by their medialib ids.
 
-        Expects a single positional argument, an integer medialib id.
-        Returns NONE or ERROR.
-
-**sync_idlist (idlist)**
-
-        Sync a list of medialib ids.
-        Either all tracks are synced, or none of them is.
-
-        Expects a single positional argument, a list of medialib ids.
+        Expects any nymber of positional arguments, all of which are medialib
+        ids. Upon error, none of the tracks are synced.
         Returns NONE or ERROR.
 
 Make sure you use the -s command line option, which tells the client to stick

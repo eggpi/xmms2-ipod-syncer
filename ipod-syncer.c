@@ -170,7 +170,7 @@ clear_tracks (context_t *context) {
  * It is the caller's responsibility to write the database back to the device.
  */
 Itdb_Track *
-sync_id (xmmsv_t *idv, context_t *context, GError **err)
+sync_track (xmmsv_t *idv, context_t *context, GError **err)
 {
     gint32 id;
     xmmsc_result_t *res;
@@ -224,22 +224,25 @@ sync_id (xmmsv_t *idv, context_t *context, GError **err)
 }
 
 /**
- * Internal, sync tracks identified by a list of ids.
+ * Sync medialib ids to the iPod.
+ * Exported for other clients.
  * This function is atomic: either all or none of the tracks are synced.
  */
-gboolean
-sync_idlist (xmmsv_t *idl, context_t *context, GError **err)
+xmmsv_t *
+sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
     Itdb_Track *t;
     xmmsv_t *id;
     xmmsv_list_iter_t *it;
+    GError *err = NULL;
     GList *n, *tracks = NULL;
+    context_t *context = (context_t *) udata;
 
-    xmmsv_get_list_iter (idl, &it);
+    xmmsv_get_list_iter (args, &it);
     while (xmmsv_list_iter_valid (it)) {
         xmmsv_list_iter_entry (it, &id);
 
-        if (!(t = sync_id (id, context, err))) {
+        if (!(t = sync_track (id, context, &err))) {
             break;
         }
 
@@ -247,8 +250,8 @@ sync_idlist (xmmsv_t *idl, context_t *context, GError **err)
         xmmsv_list_iter_next (it);
     }
 
-    if (!*err && itdb_write (context->itdb, err)) {
-        return true;
+    if (!err && itdb_write (context->itdb, &err)) {
+        return NULL;
     }
 
     /* Something went wrong -- remove all tracks we copied */
@@ -256,50 +259,7 @@ sync_idlist (xmmsv_t *idl, context_t *context, GError **err)
         remove_track ((Itdb_Track *) n->data, context);
     }
 
-    return false;
-}
-
-/**
- * Sync a track given by its medialib id to the iPod.
- * Exported for other clients.
- */
-xmmsv_t *
-sync_id_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
-{
-    GError *err = NULL;
-    xmmsv_t *idv, *ret = NULL;
-    context_t *context = (context_t *) udata;
-
-    xmmsv_list_get (args, 0, &idv);
-    sync_id (idv, udata, &err);
-
-    /* sync_id doesn't write the contents of the db,
-     * do it here if everything went well.
-     */
-    if (!err && !itdb_write (context->itdb, &err)) {
-        ret = xmmsv_error_from_GError ("can't write data: %s", &err);
-    }
-
-    return ret;
-}
-
-/**
- * Sync a list of medialib ids to the iPod.
- * Exported for other clients.
- */
-xmmsv_t *
-sync_idlist_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
-{
-    GError *err = NULL;
-    xmmsv_t *idlist, *ret = NULL;
-
-    xmmsv_list_get (args, 0, &idlist);
-
-    if (!sync_idlist (idlist, udata, &err)) {
-        ret = xmmsv_error_from_GError ("can't sync tracks: %s", &err);
-    }
-
-    return ret;
+    return xmmsv_error_from_GError ("Sync failed: %s", &err);
 }
 
 /**
@@ -308,10 +268,9 @@ sync_idlist_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 void
 run_query (const gchar *query, context_t *context)
 {
-    xmmsv_t *idl;
+    xmmsv_t *idl, *err;
     xmmsc_result_t *res;
     xmmsv_coll_t *coll;
-    GError *err = NULL;
     const char *errstr;
 
     if (!xmmsv_coll_parse (query, &coll)) {
@@ -326,9 +285,9 @@ run_query (const gchar *query, context_t *context)
     if (xmmsv_get_error (idl, &errstr)) {
         g_printf ("Failed to get collection: %s\n", errstr);
     } else {
-        if (!sync_idlist (idl, context, &err)) {
-            g_printf ("Failed to sync tracks: %s\n", err->message);
-            g_clear_error (&err);
+        if ((err = sync_method (idl, NULL, context))) {
+            xmmsv_get_error (idl, &errstr);
+            g_printf ("Failed to sync tracks: %s\n", errstr);
         }
     }
 
@@ -344,43 +303,17 @@ run_query (const gchar *query, context_t *context)
 void
 setup_service (context_t *context)
 {
-    xmmsv_t *a, *args;
-
-    a = xmmsv_sc_argument_new ("id",
-                               "The track's medialib id",
-                               XMMSV_TYPE_INT32,
-                               NULL);
-    args = xmmsv_build_list (a, XMMSV_LIST_END);
-
-    xmmsc_sc_method_new_positional (context->connection,
-                                    NULL,
-                                    sync_id_method,
-                                    "sync_id",
-                                    "Sync a single track to the iPod",
-                                    args,
-                                    false,
-                                    false,
-                                    context);
-    xmmsv_unref (args);
-
-    a = xmmsv_sc_argument_new ("idlist",
-                               "A list of medialib ids",
-                               XMMSV_TYPE_LIST,
-                               NULL);
-    args = xmmsv_build_list (a, XMMSV_LIST_END);
-
-    xmmsc_sc_method_new_positional (context->connection,
-                                    NULL,
-                                    sync_idlist_method,
-                                    "sync_idlist",
-                                    "Sync a list of ids to the iPod",
-                                    args,
-                                    false,
-                                    false,
-                                    context);
-    xmmsv_unref (args);
+    xmmsc_sc_method_new_noargs (context->connection,
+                                NULL,
+                                sync_method,
+                                "sync",
+                                "Sync tracks to the iPod",
+                                true,
+                                false,
+                                context);
 
     xmmsc_sc_setup (context->connection);
+    return;
 }
 
 int main(int argc, char **argv) {
