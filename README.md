@@ -84,5 +84,5 @@ consists of:
 
         $ ipod-syncer --clear <query-that-resolves-to-handful-of-tracks>
 
-So it is unlikely that I will be annoyed enough to work on the issues above in
-the near future.
+so it is unlikely that I will be annoyed enough to work on them in the near
+future.
