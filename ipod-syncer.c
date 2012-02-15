@@ -316,7 +316,9 @@ setup_service (context_t *context)
     return;
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
     guint ret = 0;
     GError *err = NULL;
     gboolean service = false, clear = false;
