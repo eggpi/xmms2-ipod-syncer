@@ -1,6 +1,8 @@
 /* Copyright 2012, Guilherme P. Gonçalves (guilherme.p.gonc@gmail.com)
  *
- * This program is free software: you can redistribute it and/or modify
+ * This file is part of ipod-syncer.
+ *
+ * ipod-syncer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -11,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with ipod-syncer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <glib.h>
@@ -21,11 +23,14 @@
 #include <xmmsclient/xmmsclient.h>
 #include <xmmsclient/xmmsclient-glib.h>
 
+#include "voiceover.h"
+
 #define DEFAULT_MOUNTPOINT "/media/IPOD"
 
 typedef struct {
     GMainLoop *mainloop;
     gboolean verbose;
+    gboolean voiceover;
     Itdb_iTunesDB *itdb;
     xmmsc_connection_t *connection;
 } context_t;
@@ -138,6 +143,10 @@ remove_track (Itdb_Track *track, context_t *context)
         g_free (filepath);
     }
 
+    if (context->voiceover) {
+        remove_voiceover (track);
+    }
+
     itdb_track_remove (track);
 
     return;
@@ -213,6 +222,14 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
         if (!filepath) {
             g_set_error_literal (err, 0, 0, "can't determine path for track");
         }
+    }
+
+    if (track && context->voiceover) {
+        if (context->verbose) {
+            g_printf ("Creating voiceover track\n");
+        }
+
+        make_voiceover (track);
     }
 
     g_free (filepath);
@@ -365,6 +382,8 @@ main(int argc, char **argv)
         goto out;
     }
 
+    context.voiceover = voiceover_init (mountpoint);
+
     if (clear) {
         clear_tracks (&context);
     }
@@ -389,6 +408,7 @@ out:
     if (optc) g_option_context_free (optc);
     if (context.connection) xmmsc_unref (context.connection);
     if (context.itdb) itdb_free (context.itdb);
+    if (context.voiceover) voiceover_deinit ();
 
     return ret;
 }

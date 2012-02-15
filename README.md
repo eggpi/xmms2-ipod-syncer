@@ -9,6 +9,12 @@ iPod, and to clear all tracks in the device. For instance:
 
 copies all songs from The Beatles, except for those in Revolver, to the iPod.
 
+This client also supports Voiceover, that mildly cool feature in the iPod
+Shuffle 3G where a synthesized voice speaks the metadata of a track, mainly to
+compensate for the lack of a screen in the device's body.
+
+The Voiceover tracks are automatically created when you sync music to your iPod.
+
 This client uses the GNU GPL license.
 
 ## why?
@@ -30,9 +36,13 @@ This client uses the GNU GPL license.
 
 You will need libgpod and, of course, libxmmsclient.
 
+For Voiceover support, you'll also need libespeak, which generally comes
+installed with espeak. I will make this dependency optional in the near future.
+
 The repository includes a half-arsed Makefile you will likely need to edit.
 
-Still, you'll be simply compiling a single file, I'm sure you can handle it ;)
+Still, you'll be simply compiling a couple of files, I'm sure you can handle
+it ;)
 
 ## how do I use it?
 

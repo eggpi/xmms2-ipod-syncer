@@ -1,8 +1,11 @@
-INCLUDES=-I/usr/include/xmms2/ -I/usr/lib/glib-2.0/include -I/usr/include/glib-2.0 -I/usr/include/gpod-1.0/
-LIBS=-lxmmsclient -lgpod -lglib-2.0
+ipod-syncer: ipod-syncer.o voiceover.o
+	$(CC) -g -Wall $(shell pkg-config --libs glib-2.0 xmms2-client) -lespeak -lgpod ipod-syncer.o voiceover.o -o ipod-syncer
 
-ipod-syncer: ipod-syncer.c
-	$(CC) -g -Wall $(INCLUDES) $(LIBS) $(CFLAGS) ipod-syncer.c -o $@
+ipod-syncer.o: ipod-syncer.c
+	$(CC) -c -g -Wall $(shell pkg-config --cflags glib-2.0 xmms2-client) -I/usr/include/gpod-1.0/ ipod-syncer.c -o ipod-syncer.o
+
+voiceover.o: voiceover.c
+	$(CC) -c -g -Wall $(shell pkg-config --cflags glib-2.0) -I/usr/include/gpod-1.0/ voiceover.c -o voiceover.o
 
 clean:
-	rm -f ipod-syncer
+	rm -f *.o ipod-syncer
