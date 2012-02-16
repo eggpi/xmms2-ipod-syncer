@@ -37,12 +37,15 @@ This client uses the GNU GPL license.
 You will need libgpod and, of course, libxmmsclient.
 
 For Voiceover support, you'll also need libespeak, which generally comes
-installed with espeak. I will make this dependency optional in the near future.
+installed with espeak.
 
-The repository includes a half-arsed Makefile you will likely need to edit.
+Finally, you will need the SCons build system. In order to build the client,
+simply issue:
 
-Still, you'll be simply compiling a couple of files, I'm sure you can handle
-it ;)
+        $ scons
+
+and everything should go fine. If you don't want Voiceover support, just add
+the --without-voiceover option to the command above.
 
 ## how do I use it?
 

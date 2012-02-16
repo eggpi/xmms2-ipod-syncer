@@ -23,14 +23,18 @@
 #include <xmmsclient/xmmsclient.h>
 #include <xmmsclient/xmmsclient-glib.h>
 
-#include "voiceover.h"
+#ifdef VOICEOVER
+    #include "voiceover.h"
+#endif
 
 #define DEFAULT_MOUNTPOINT "/media/IPOD"
 
 typedef struct {
     GMainLoop *mainloop;
     gboolean verbose;
+#ifdef VOICEOVER
     gboolean voiceover;
+#endif
     Itdb_iTunesDB *itdb;
     xmmsc_connection_t *connection;
 } context_t;
@@ -143,9 +147,11 @@ remove_track (Itdb_Track *track, context_t *context)
         g_free (filepath);
     }
 
+#ifdef VOICEOVER
     if (context->voiceover) {
         remove_voiceover (track);
     }
+#endif
 
     itdb_track_remove (track);
 
@@ -224,6 +230,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
         }
     }
 
+#ifdef VOICEOVER
     if (track && context->voiceover) {
         if (context->verbose) {
             g_printf ("Creating voiceover track\n");
@@ -231,6 +238,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
         make_voiceover (track);
     }
+#endif
 
     g_free (filepath);
 
@@ -382,7 +390,9 @@ main(int argc, char **argv)
         goto out;
     }
 
+#ifdef VOICEOVER
     context.voiceover = voiceover_init (mountpoint);
+#endif
 
     if (clear) {
         clear_tracks (&context);
@@ -409,7 +419,9 @@ out:
     if (optc) g_option_context_free (optc);
     if (context.connection) xmmsc_unref (context.connection);
     if (context.itdb) itdb_free (context.itdb);
+#ifdef VOICEOVER
     if (context.voiceover) voiceover_deinit ();
+#endif
 
     return ret;
 }
