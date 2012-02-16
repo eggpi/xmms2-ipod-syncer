@@ -397,6 +397,7 @@ main(int argc, char **argv)
     if (service) {
         /* FIXME: leaks */
         context.mainloop = g_main_loop_new (NULL, FALSE);
+        xmmsc_mainloop_gmain_init (context.connection);
         setup_service (&context);
         g_main_loop_run (context.mainloop);
     }
