@@ -1,3 +1,5 @@
 TAGS
 *.o
 ipod-syncer
+.scon*
+config.log
