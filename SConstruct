@@ -61,7 +61,7 @@ env = Environment()
 if not env.GetOption("clean"):
     CheckDeps()
 
-if env["voiceover"]:
+if env.get("voiceover"):
     env.Append(CFLAGS = "-DVOICEOVER")
 
 syncer_node = env.Object("ipod-syncer.c")
