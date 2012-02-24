@@ -43,7 +43,7 @@ typedef struct {
  * Build a xmmsv_t error from a GError.
  * Resets the GError.
  */
-xmmsv_t *
+static xmmsv_t *
 xmmsv_error_from_GError (const gchar *format, GError **err)
 {
     xmmsv_t *ret;
@@ -61,7 +61,7 @@ xmmsv_error_from_GError (const gchar *format, GError **err)
 /**
  * Import track properties from the medialib into an Itdb_Track.
  */
-void
+static void
 import_track_properties (Itdb_Track *track, xmmsv_t *properties)
 {
     /* Convenience macros -- extract keys from the properties dict
@@ -98,7 +98,7 @@ import_track_properties (Itdb_Track *track, xmmsv_t *properties)
 /**
  * Helper function to extract a file's path from its medialib info.
  */
-gchar *
+static gchar *
 filepath_from_medialib_info (xmmsv_t *info)
 {
     xmmsv_t *url;
@@ -126,7 +126,7 @@ filepath_from_medialib_info (xmmsv_t *info)
  * It is the caller's responsibility to write the database back
  * to the device after calling this function.
  */
-void
+static void
 remove_track (Itdb_Track *track, context_t *context)
 {
     GList *n;
@@ -162,7 +162,7 @@ remove_track (Itdb_Track *track, context_t *context)
  * Remove all tracks from the iPod.
  * Playlists are kept, even if empty.
  */
-void
+static void
 clear_tracks (context_t *context) {
     GList *n, *next;
     GError *err = NULL;
@@ -184,7 +184,7 @@ clear_tracks (context_t *context) {
  * Returns the newly created Itdb_Track, or NULL upon error.
  * It is the caller's responsibility to write the database back to the device.
  */
-Itdb_Track *
+static Itdb_Track *
 sync_track (xmmsv_t *idv, context_t *context, GError **err)
 {
     gint32 id;
@@ -253,7 +253,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
  * Exported for other clients.
  * This function is atomic: either all or none of the tracks are synced.
  */
-xmmsv_t *
+static xmmsv_t *
 sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
     Itdb_Track *t;
@@ -290,7 +290,7 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 /**
  * Run a collection query and sync the resulting ids.
  */
-void
+static void
 run_query (const gchar *query, context_t *context)
 {
     xmmsv_t *idl, *err;
@@ -325,7 +325,7 @@ run_query (const gchar *query, context_t *context)
 /**
  * Set up a service for syncing tracks.
  */
-void
+static void
 setup_service (context_t *context)
 {
     xmmsc_sc_method_new_noargs (context->connection,
