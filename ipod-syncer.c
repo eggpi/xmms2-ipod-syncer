@@ -39,6 +39,16 @@ typedef struct {
     xmmsc_connection_t *connection;
 } context_t;
 
+static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
+static void import_track_properties (Itdb_Track *track, xmmsv_t *properties);
+static gchar *filepath_from_medialib_info (xmmsv_t *info);
+static void remove_track (Itdb_Track *track, context_t *context);
+static void clear_tracks (context_t *context);
+static Itdb_Track *sync_track (xmmsv_t *idv, context_t *context, GError **err);
+static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
+static void run_query (const gchar *query, context_t *context);
+static void setup_service (context_t *context);
+
 /**
  * Build a xmmsv_t error from a GError.
  * Resets the GError.
@@ -163,7 +173,8 @@ remove_track (Itdb_Track *track, context_t *context)
  * Playlists are kept, even if empty.
  */
 static void
-clear_tracks (context_t *context) {
+clear_tracks (context_t *context)
+{
     GList *n, *next;
     GError *err = NULL;
 

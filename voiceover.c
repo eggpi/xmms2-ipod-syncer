@@ -27,6 +27,8 @@
 #include <gpod/itdb.h>
 #include <espeak/speak_lib.h>
 
+#include "voiceover.h"
+
 /* These are initialized along with espeak in voiceover_init.
  * Having espeak (de)initialize for every track makes it segfault,
  * so we only initialize it once and keep state in global variables.
@@ -38,6 +40,13 @@ typedef struct {
     FILE *wavfile;
     gchar *wavpath;
 } synth_context_t;
+
+static void write_4_bytes (FILE *f, guint value);
+static FILE *open_wav (gchar *path);
+static void close_wav (FILE *wav);
+static gint synth_cb (gshort *wav, gint numsamples, espeak_EVENT *events);
+static gchar *voiceover_path (Itdb_Track *track, const gchar *voiceoverd);
+static gchar *get_tracks_voiceover_dir (const gchar *mountpoint);
 
 /**
  * Write 4 bytes into a file, from least to most significant.
@@ -99,7 +108,6 @@ close_wav (FILE *wav)
     return;
 }
 
-
 static gint
 synth_cb (gshort *wav, gint numsamples, espeak_EVENT *events)
 {
@@ -146,7 +154,7 @@ voiceover_path (Itdb_Track *track, const gchar *voiceoverd)
  * if it exists, or NULL.
  * The path must be free'd by the caller afterwards.
  */
-gchar *
+static gchar *
 get_tracks_voiceover_dir (const gchar *mountpoint)
 {
     gchar *control, *voiceoverd;
