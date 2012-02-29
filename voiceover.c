@@ -33,7 +33,7 @@
  * Having espeak (de)initialize for every track makes it segfault,
  * so we only initialize it once and keep state in global variables.
  */
-static guint samplerate;
+static gint samplerate;
 static gchar *tracks_voiceoverd;
 
 typedef struct {
