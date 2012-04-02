@@ -31,6 +31,15 @@
 
 #define DEFAULT_MOUNTPOINT "/media/IPOD"
 
+/* Rudimentary logging */
+#define LOG_MESSAGE(context, ...) \
+    if (context->verbose) { \
+        g_printf (__VA_ARGS__); \
+    }
+
+#define LOG_ERROR(...) \
+    g_fprintf (stderr, __VA_ARGS__);
+
 typedef struct {
     GMainLoop *mainloop;
     gboolean verbose;
@@ -45,7 +54,7 @@ static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
 static void import_track_properties (Itdb_Track *track, xmmsv_t *properties);
 static gchar *filepath_from_medialib_info (xmmsv_t *info);
 static void remove_track (Itdb_Track *track, context_t *context);
-static void clear_tracks (context_t *context);
+static gboolean clear_tracks (context_t *context, GError **err);
 static Itdb_Track *sync_track (xmmsv_t *idv, context_t *context, GError **err);
 static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
 static void run_query (const gchar *query, context_t *context);
@@ -144,9 +153,7 @@ remove_track (Itdb_Track *track, context_t *context)
     GList *n;
     gchar *filepath;
 
-    if (context->verbose) {
-        g_printf ("Deleting track %s\n", track->title);
-    }
+    LOG_MESSAGE(context, "Deleting track %s\n", track->title);
 
     /* remove track from all playlists */
     for (n = context->itdb->playlists; n; n = g_list_next (n)) {
@@ -174,22 +181,17 @@ remove_track (Itdb_Track *track, context_t *context)
  * Remove all tracks from the iPod.
  * Playlists are kept, even if empty.
  */
-static void
-clear_tracks (context_t *context)
+static gboolean
+clear_tracks (context_t *context, GError **err)
 {
     GList *n, *next;
-    GError *err = NULL;
 
     for (n = context->itdb->tracks; n; n = next) {
         next = g_list_next (n);
         remove_track (n->data, context);
     }
 
-    if (!itdb_write (context->itdb, &err)) {
-        g_printf ("Can't write database: %s\n", err->message);
-    }
-
-    return;
+    return itdb_write (context->itdb, err);
 }
 
 /**
@@ -227,9 +229,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
     import_track_properties (track, properties);
 
-    if (context->verbose) {
-        g_printf ("Syncing track %s by %s\n", track->title, track->artist);
-    }
+    LOG_MESSAGE (context, "Syncing track %s by %s\n", track->title, track->artist);
 
     itdb_track_add (context->itdb, track, -1);
     itdb_playlist_add_track (mpl, track, -1);
@@ -238,14 +238,12 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     if (!filepath) {
         g_set_error_literal (&tmp_err, 0, 0, "can't determine path for track");
     } else if (!is_mp3 (filepath)) {
-        if (context->verbose) {
-            g_printf ("Converting track to mp3\n");
-        }
+        LOG_MESSAGE (context, "  converting track to mp3\n");
 
         mp3path = convert_to_mp3 (filepath, &tmp_err);
 
         /* does nothing if tmp_err is NULL */
-        g_prefix_error (&tmp_err, "conversion to mp3 failed. Reason:");
+        g_prefix_error (&tmp_err, "conversion to mp3 failed. Reason: ");
 
         g_free (filepath);
         filepath = mp3path;
@@ -257,9 +255,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
 #ifdef VOICEOVER
         if (!tmp_err && context->voiceover) {
-            if (context->verbose) {
-                g_printf ("Creating voiceover track\n");
-            }
+            LOG_MESSAGE (context, "  creating voiceover track\n");
 
             make_voiceover (track);
         }
@@ -275,7 +271,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     if (mp3path) {
         g_assert (filepath == mp3path);
         if (context->verbose) {
-            g_printf ("Removing temporary mp3 file\n");
+            LOG_MESSAGE (context, "  removing temporary mp3 file\n");
         }
 
         g_remove (mp3path);
@@ -340,7 +336,7 @@ run_query (const gchar *query, context_t *context)
     const char *errstr;
 
     if (!xmmsv_coll_parse (query, &coll)) {
-        g_printf ("Failed to parse query.\n");
+        LOG_ERROR ("Failed to parse query.\n");
         return;
     }
 
@@ -349,11 +345,11 @@ run_query (const gchar *query, context_t *context)
 
     idl = xmmsc_result_get_value (res);
     if (xmmsv_get_error (idl, &errstr)) {
-        g_printf ("Failed to get collection: %s\n", errstr);
+        LOG_ERROR ("Failed to get collection: %s\n", errstr);
     } else {
         if ((err = sync_method (idl, NULL, context))) {
             xmmsv_get_error (err, &errstr);
-            g_printf ("%s\n", errstr);
+            LOG_ERROR ("%s\n", errstr);
         }
     }
 
@@ -404,29 +400,27 @@ main(int argc, char **argv)
     g_option_context_add_main_entries (optc, entries, NULL);
 
     if (!g_option_context_parse (optc, &argc, &argv, &err)) {
-        g_printf ("Failed to parse options: %s\n", err->message);
-        g_error_free (err); err = NULL;
+        LOG_ERROR ("Failed to parse options: %s\n", err->message);
         ret = 1;
         goto out;
     }
 
     if (!(service || argc > 1 || clear)) {
-        g_printf ("Need either --service, --clear or a query string.\n");
+        LOG_ERROR ("Need either --service, --clear or a query string.\n");
         ret = 1;
         goto out;
     }
 
     context.connection = xmmsc_init ("ipod-syncer");
     if (!xmmsc_connect (context.connection, getenv ("XMMS_PATH"))) {
-        g_printf ("Failed to connect to xmms2 daemon, leaving.\n");
+        LOG_ERROR ("Failed to connect to xmms2 daemon, leaving.\n");
         ret = 1;
         goto out;
     }
 
     context.itdb = itdb_parse (mountpoint, &err);
     if (!context.itdb) {
-        g_printf ("Failed to parse iPod database: %s\n", err->message);
-        g_error_free (err);
+        LOG_ERROR ("Failed to parse iPod database: %s\n", err->message);
         ret = 1;
         goto out;
     }
@@ -435,8 +429,10 @@ main(int argc, char **argv)
     context.voiceover = voiceover_init (mountpoint);
 #endif
 
-    if (clear) {
-        clear_tracks (&context);
+    if (clear && !clear_tracks (&context, &err)) {
+        LOG_ERROR ("Failed to clear tracks: %s\n", err->message);
+        ret = 1;
+        goto out;
     }
 
     if (argc > 1) {
