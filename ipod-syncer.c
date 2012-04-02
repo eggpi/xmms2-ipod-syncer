@@ -244,6 +244,9 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
         mp3path = convert_to_mp3 (filepath, &tmp_err);
 
+        /* does nothing if tmp_err is NULL */
+        g_prefix_error (&tmp_err, "conversion to mp3 failed. Reason:");
+
         g_free (filepath);
         filepath = mp3path;
     }
