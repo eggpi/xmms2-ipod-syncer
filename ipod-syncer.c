@@ -27,6 +27,8 @@
     #include "voiceover.h"
 #endif
 
+#include "conversion.h"
+
 #define DEFAULT_MOUNTPOINT "/media/IPOD"
 
 typedef struct {
@@ -205,7 +207,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     Itdb_Track *track;
     Itdb_Playlist *mpl;
 
-    gchar *filepath;
+    gchar *filepath, *mp3path = NULL;
 
     if (!xmmsv_get_int (idv, &id)) {
         g_set_error_literal (err, 0, 0, "can't parse track id");
@@ -232,24 +234,45 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     itdb_playlist_add_track (mpl, track, -1);
 
     filepath = filepath_from_medialib_info (properties);
-    if (!filepath || !itdb_cp_track_to_ipod (track, filepath, err)) {
-        remove_track (track, context);
-        track = NULL;
-
-        if (!filepath) {
-            g_set_error_literal (err, 0, 0, "can't determine path for track");
+    if (!filepath) {
+        g_set_error_literal (err, 0, 0, "can't determine path for track");
+    } else if (!is_mp3 (filepath)) {
+        if (context->verbose) {
+            g_printf ("Converting track to mp3\n");
         }
+
+        mp3path = convert_to_mp3 (filepath, err);
+
+        g_free (filepath);
+        filepath = mp3path;
     }
+
+    if (!*err) {
+        g_assert (filepath && track);
+        itdb_cp_track_to_ipod (track, filepath, err);
 
 #ifdef VOICEOVER
-    if (track && context->voiceover) {
+        if (!*err && context->voiceover) {
+            if (context->verbose) {
+                g_printf ("Creating voiceover track\n");
+            }
+
+            make_voiceover (track);
+        }
+#endif
+    } else {
+        remove_track (track, context);
+        track = NULL;
+    }
+
+    if (mp3path) {
+        g_assert (filepath == mp3path);
         if (context->verbose) {
-            g_printf ("Creating voiceover track\n");
+            g_printf ("Removing temporary mp3 file\n");
         }
 
-        make_voiceover (track);
+        g_remove (mp3path);
     }
-#endif
 
     g_free (filepath);
 

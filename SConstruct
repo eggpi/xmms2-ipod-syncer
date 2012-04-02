@@ -65,9 +65,10 @@ if env.get("voiceover"):
     env.Append(CFLAGS = "-DVOICEOVER")
 
 syncer_node = env.Object("ipod-syncer.c")
+conversion_node = env.Object("conversion.c")
 
 voiceover_node = []
 if env.GetOption("clean") or env["voiceover"]:
     voiceover_node = env.Object("voiceover.c")
 
-env.Program(syncer_node + voiceover_node)
+env.Program(syncer_node + voiceover_node + conversion_node)

@@ -11,9 +11,12 @@ copies all songs from The Beatles, except for those in Revolver, to the iPod.
 
 This client also supports Voiceover, that mildly cool feature in the iPod
 Shuffle 3G where a synthesized voice speaks the metadata of a track, mainly to
-compensate for the lack of a screen in the device's body.
+compensate for the lack of a screen in the device's body.  The Voiceover tracks
+are automatically created when you sync music to your iPod.
 
-The Voiceover tracks are automatically created when you sync music to your iPod.
+There is also experimental support for conversion of tracks. All tracks will be
+converted to mp3 if needed before being synced to the iPod. Currently supported
+input formats include ogg, flac and m4a.
 
 This client uses the GNU GPL license.
 
@@ -38,6 +41,9 @@ You will need libgpod and, of course, libxmmsclient.
 
 For Voiceover support, you'll also need libespeak, which generally comes
 installed with espeak.
+
+For track conversion support, you will need vorbis-tools (ogg support), flac
+(flac support), faad (m4a support) and ffmpeg (all other formats).
 
 Finally, you will need the SCons build system. In order to build the client,
 simply issue:
