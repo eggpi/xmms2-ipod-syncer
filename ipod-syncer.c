@@ -203,6 +203,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     gint32 id;
     xmmsc_result_t *res;
     xmmsv_t *properties;
+    GError *tmp_err = NULL;
 
     Itdb_Track *track;
     Itdb_Playlist *mpl;
@@ -235,24 +236,24 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
     filepath = filepath_from_medialib_info (properties);
     if (!filepath) {
-        g_set_error_literal (err, 0, 0, "can't determine path for track");
+        g_set_error_literal (&tmp_err, 0, 0, "can't determine path for track");
     } else if (!is_mp3 (filepath)) {
         if (context->verbose) {
             g_printf ("Converting track to mp3\n");
         }
 
-        mp3path = convert_to_mp3 (filepath, err);
+        mp3path = convert_to_mp3 (filepath, &tmp_err);
 
         g_free (filepath);
         filepath = mp3path;
     }
 
-    if (!*err) {
+    if (!tmp_err) {
         g_assert (filepath && track);
-        itdb_cp_track_to_ipod (track, filepath, err);
+        itdb_cp_track_to_ipod (track, filepath, &tmp_err);
 
 #ifdef VOICEOVER
-        if (!*err && context->voiceover) {
+        if (!tmp_err && context->voiceover) {
             if (context->verbose) {
                 g_printf ("Creating voiceover track\n");
             }
@@ -260,9 +261,12 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
             make_voiceover (track);
         }
 #endif
-    } else {
+    }
+
+    if (tmp_err) {
         remove_track (track, context);
         track = NULL;
+        g_propagate_error (err, tmp_err);
     }
 
     if (mp3path) {
