@@ -322,7 +322,7 @@ run_query (const gchar *query, context_t *context)
         g_printf ("Failed to get collection: %s\n", errstr);
     } else {
         if ((err = sync_method (idl, NULL, context))) {
-            xmmsv_get_error (idl, &errstr);
+            xmmsv_get_error (err, &errstr);
             g_printf ("Failed to sync tracks: %s\n", errstr);
         }
     }
