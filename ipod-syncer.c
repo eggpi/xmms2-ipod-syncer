@@ -270,10 +270,7 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
 
     if (mp3path) {
         g_assert (filepath == mp3path);
-        if (context->verbose) {
-            LOG_MESSAGE (context, "  removing temporary mp3 file\n");
-        }
-
+        LOG_MESSAGE (context, "  removing temporary mp3 file\n");
         g_remove (mp3path);
     }
 
