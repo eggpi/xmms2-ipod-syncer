@@ -51,7 +51,7 @@ typedef struct {
 } context_t;
 
 static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
-static void import_track_properties (Itdb_Track *track, xmmsv_t *properties);
+static gboolean import_track_properties (context_t *context, Itdb_Track *track, gint32 id, GError **err);
 static gchar *filepath_from_medialib_info (xmmsv_t *info);
 static void remove_track (Itdb_Track *track, context_t *context);
 static gboolean clear_tracks (context_t *context, GError **err);
@@ -82,9 +82,22 @@ xmmsv_error_from_GError (const gchar *format, GError **err)
 /**
  * Import track properties from the medialib into an Itdb_Track.
  */
-static void
-import_track_properties (Itdb_Track *track, xmmsv_t *properties)
+static gboolean
+import_track_properties (context_t *context, Itdb_Track *track, gint32 id, GError **err)
 {
+    xmmsc_result_t *res;
+    xmmsv_t *properties;
+
+    res = xmmsc_medialib_get_info (context->connection, id);
+    xmmsc_result_wait (res);
+
+    if (xmmsv_is_error (xmmsc_result_get_value (res))) {
+        g_set_error_literal (err, 0, 0, "failed to query track info");
+        return false;
+    }
+
+    properties = xmmsv_propdict_to_dict (xmmsc_result_get_value (res), NULL);
+
     /* Convenience macros -- extract keys from the properties dict
      * and set the corresponding field in the track object.
      */
@@ -113,7 +126,13 @@ import_track_properties (Itdb_Track *track, xmmsv_t *properties)
     TRANSLATE_INT_PROPERTY(tracklen, "duration");
     TRANSLATE_INT_PROPERTY(track_nr, "tracknr");
 
-    return;
+    track->userdata = (gpointer) filepath_from_medialib_info (properties);
+
+    xmmsc_result_unref (res);
+    xmmsv_unref (properties);
+
+    /* we need at least the path to proceed */
+    return track->userdata != NULL;
 }
 
 /**
@@ -202,33 +221,28 @@ clear_tracks (context_t *context, GError **err)
 static Itdb_Track *
 sync_track (gint32 id, context_t *context, GError **err)
 {
-    xmmsc_result_t *res;
-    xmmsv_t *properties;
-    GError *tmp_err = NULL;
-
     Itdb_Track *track;
     Itdb_Playlist *mpl;
 
     gchar *filepath, *mp3path = NULL;
+    GError *tmp_err = NULL;
 
     track = itdb_track_new ();
     mpl = itdb_playlist_mpl (context->itdb);
 
-    res = xmmsc_medialib_get_info (context->connection, id);
-    xmmsc_result_wait (res);
-    properties = xmmsv_propdict_to_dict (xmmsc_result_get_value (res), NULL);
-
-    import_track_properties (track, properties);
-
-    LOG_MESSAGE (context, "Syncing track %s by %s\n", track->title, track->artist);
-
     itdb_track_add (context->itdb, track, -1);
     itdb_playlist_add_track (mpl, track, -1);
 
-    filepath = filepath_from_medialib_info (properties);
-    if (!filepath) {
-        g_set_error_literal (&tmp_err, 0, 0, "can't determine path for track");
-    } else if (!is_mp3 (filepath)) {
+    if (!import_track_properties (context, track, id, err)) {
+        return NULL;
+    }
+
+    LOG_MESSAGE (context, "Syncing track %s by %s\n", track->title, track->artist);
+
+    filepath = (gchar *) track->userdata;
+    g_assert (filepath);
+
+    if (!is_mp3 (filepath)) {
         LOG_MESSAGE (context, "  converting track to mp3\n");
 
         mp3path = convert_to_mp3 (filepath, &tmp_err);
@@ -266,9 +280,6 @@ sync_track (gint32 id, context_t *context, GError **err)
     }
 
     g_free (filepath);
-
-    xmmsv_unref (properties);
-    xmmsc_result_unref (res);
 
     return track;
 }
