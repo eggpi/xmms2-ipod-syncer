@@ -32,33 +32,32 @@
 #define DEFAULT_MOUNTPOINT "/media/IPOD"
 
 /* Rudimentary logging */
-#define LOG_MESSAGE(context, ...) \
-    if (context->verbose) { \
+#define LOG_MESSAGE(...) \
+    if (verbose) { \
         g_printf (__VA_ARGS__); \
     }
 
 #define LOG_ERROR(...) \
     g_fprintf (stderr, __VA_ARGS__);
 
-typedef struct {
-    GMainLoop *mainloop;
-    gboolean verbose;
+static GMainLoop *mainloop;
+static gboolean verbose;
+static Itdb_iTunesDB *itdb;
+static xmmsc_connection_t *connection;
+
 #ifdef VOICEOVER
-    gboolean voiceover;
+static gboolean voiceover;
 #endif
-    Itdb_iTunesDB *itdb;
-    xmmsc_connection_t *connection;
-} context_t;
 
 static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
-static gboolean import_track_properties (context_t *context, Itdb_Track *track, gint32 id, GError **err);
+static gboolean import_track_properties (Itdb_Track *track, gint32 id, GError **err);
 static gchar *filepath_from_medialib_info (xmmsv_t *info);
-static void remove_track (Itdb_Track *track, context_t *context);
-static gboolean clear_tracks (context_t *context, GError **err);
-static Itdb_Track *sync_track (gint32 id, context_t *context, GError **err);
+static void remove_track (Itdb_Track *track);
+static gboolean clear_tracks (GError **err);
+static Itdb_Track *sync_track (gint32 id, GError **err);
 static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
-static void run_query (const gchar *query, context_t *context);
-static void setup_service (context_t *context);
+static void run_query (const gchar *query);
+static void setup_service ();
 
 /**
  * Build a xmmsv_t error from a GError.
@@ -83,12 +82,12 @@ xmmsv_error_from_GError (const gchar *format, GError **err)
  * Import track properties from the medialib into an Itdb_Track.
  */
 static gboolean
-import_track_properties (context_t *context, Itdb_Track *track, gint32 id, GError **err)
+import_track_properties (Itdb_Track *track, gint32 id, GError **err)
 {
     xmmsc_result_t *res;
     xmmsv_t *properties;
 
-    res = xmmsc_medialib_get_info (context->connection, id);
+    res = xmmsc_medialib_get_info (connection, id);
     xmmsc_result_wait (res);
 
     if (xmmsv_is_error (xmmsc_result_get_value (res))) {
@@ -167,15 +166,15 @@ filepath_from_medialib_info (xmmsv_t *info)
  * to the device after calling this function.
  */
 static void
-remove_track (Itdb_Track *track, context_t *context)
+remove_track (Itdb_Track *track)
 {
     GList *n;
     gchar *filepath;
 
-    LOG_MESSAGE(context, "Deleting track %s\n", track->title);
+    LOG_MESSAGE("Deleting track %s\n", track->title);
 
     /* remove track from all playlists */
-    for (n = context->itdb->playlists; n; n = g_list_next (n)) {
+    for (n = itdb->playlists; n; n = g_list_next (n)) {
         itdb_playlist_remove_track ((Itdb_Playlist *) n->data, track);
     }
 
@@ -186,7 +185,7 @@ remove_track (Itdb_Track *track, context_t *context)
     }
 
 #ifdef VOICEOVER
-    if (context->voiceover) {
+    if (voiceover) {
         remove_voiceover (track);
     }
 #endif
@@ -201,16 +200,16 @@ remove_track (Itdb_Track *track, context_t *context)
  * Playlists are kept, even if empty.
  */
 static gboolean
-clear_tracks (context_t *context, GError **err)
+clear_tracks (GError **err)
 {
     GList *n, *next;
 
-    for (n = context->itdb->tracks; n; n = next) {
+    for (n = itdb->tracks; n; n = next) {
         next = g_list_next (n);
-        remove_track (n->data, context);
+        remove_track (n->data);
     }
 
-    return itdb_write (context->itdb, err);
+    return itdb_write (itdb, err);
 }
 
 /**
@@ -219,7 +218,7 @@ clear_tracks (context_t *context, GError **err)
  * It is the caller's responsibility to write the database back to the device.
  */
 static Itdb_Track *
-sync_track (gint32 id, context_t *context, GError **err)
+sync_track (gint32 id, GError **err)
 {
     Itdb_Track *track;
     Itdb_Playlist *mpl;
@@ -228,22 +227,22 @@ sync_track (gint32 id, context_t *context, GError **err)
     GError *tmp_err = NULL;
 
     track = itdb_track_new ();
-    mpl = itdb_playlist_mpl (context->itdb);
+    mpl = itdb_playlist_mpl (itdb);
 
-    itdb_track_add (context->itdb, track, -1);
+    itdb_track_add (itdb, track, -1);
     itdb_playlist_add_track (mpl, track, -1);
 
-    if (!import_track_properties (context, track, id, err)) {
+    if (!import_track_properties (track, id, err)) {
         return NULL;
     }
 
-    LOG_MESSAGE (context, "Syncing track %s by %s\n", track->title, track->artist);
+    LOG_MESSAGE ("Syncing track %s by %s\n", track->title, track->artist);
 
     filepath = (gchar *) track->userdata;
     g_assert (filepath);
 
     if (!is_mp3 (filepath)) {
-        LOG_MESSAGE (context, "  converting track to mp3\n");
+        LOG_MESSAGE ("  converting track to mp3\n");
 
         mp3path = convert_to_mp3 (filepath, &tmp_err);
 
@@ -259,8 +258,8 @@ sync_track (gint32 id, context_t *context, GError **err)
         itdb_cp_track_to_ipod (track, filepath, &tmp_err);
 
 #ifdef VOICEOVER
-        if (!tmp_err && context->voiceover) {
-            LOG_MESSAGE (context, "  creating voiceover track\n");
+        if (!tmp_err && voiceover) {
+            LOG_MESSAGE ("  creating voiceover track\n");
 
             make_voiceover (track);
         }
@@ -268,14 +267,14 @@ sync_track (gint32 id, context_t *context, GError **err)
     }
 
     if (tmp_err) {
-        remove_track (track, context);
+        remove_track (track);
         track = NULL;
         g_propagate_error (err, tmp_err);
     }
 
     if (mp3path) {
         g_assert (filepath == mp3path);
-        LOG_MESSAGE (context, "  removing temporary mp3 file\n");
+        LOG_MESSAGE ("  removing temporary mp3 file\n");
         g_remove (mp3path);
     }
 
@@ -298,7 +297,6 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
     xmmsv_list_iter_t *it;
     GError *err = NULL;
     GList *n, *tracks = NULL;
-    context_t *context = (context_t *) udata;
 
     xmmsv_get_list_iter (args, &it);
     while (xmmsv_list_iter_valid (it)) {
@@ -310,7 +308,7 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
         } else if (id <= 0) {
             g_set_error_literal (&err, 0, 0, "invalid track id");
             break;
-        } else if (!(t = sync_track (id, context, &err))) {
+        } else if (!(t = sync_track (id, &err))) {
             break;
         }
 
@@ -318,13 +316,13 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
         xmmsv_list_iter_next (it);
     }
 
-    if (!err && itdb_write (context->itdb, &err)) {
+    if (!err && itdb_write (itdb, &err)) {
         return NULL;
     }
 
     /* Something went wrong -- remove all tracks we copied */
     for (n = tracks; n; n = g_list_next (n)) {
-        remove_track ((Itdb_Track *) n->data, context);
+        remove_track ((Itdb_Track *) n->data);
     }
 
     return xmmsv_error_from_GError ("Sync failed: %s", &err);
@@ -334,7 +332,7 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
  * Run a collection query and sync the resulting ids.
  */
 static void
-run_query (const gchar *query, context_t *context)
+run_query (const gchar *query)
 {
     xmmsv_t *idl, *err;
     xmmsc_result_t *res;
@@ -346,14 +344,14 @@ run_query (const gchar *query, context_t *context)
         return;
     }
 
-    res = xmmsc_coll_query_ids (context->connection, coll, NULL, 0, 0);
+    res = xmmsc_coll_query_ids (connection, coll, NULL, 0, 0);
     xmmsc_result_wait (res);
 
     idl = xmmsc_result_get_value (res);
     if (xmmsv_get_error (idl, &errstr)) {
         LOG_ERROR ("Failed to get collection: %s\n", errstr);
     } else {
-        if ((err = sync_method (idl, NULL, context))) {
+        if ((err = sync_method (idl, NULL, NULL))) {
             xmmsv_get_error (err, &errstr);
             LOG_ERROR ("%s\n", errstr);
         }
@@ -369,18 +367,18 @@ run_query (const gchar *query, context_t *context)
  * Set up a service for syncing tracks.
  */
 static void
-setup_service (context_t *context)
+setup_service ()
 {
-    xmmsc_sc_method_new_noargs (context->connection,
+    xmmsc_sc_method_new_noargs (connection,
                                 NULL,
                                 sync_method,
                                 "sync",
                                 "Sync tracks to the iPod",
                                 true,
                                 false,
-                                context);
+                                NULL);
 
-    xmmsc_sc_setup (context->connection);
+    xmmsc_sc_setup (connection);
     return;
 }
 
@@ -391,13 +389,12 @@ main(int argc, char **argv)
     GError *err = NULL;
     gboolean service = false, clear = false;
     gchar *mountpoint = g_strdup (DEFAULT_MOUNTPOINT), *query = NULL;
-    context_t context = {0};
 
     GOptionContext *optc;
     GOptionEntry entries[] = {
         {"mountpoint", 'm', 0, G_OPTION_ARG_STRING, &mountpoint, "The mountpoint for the iPod. Default: " DEFAULT_MOUNTPOINT, NULL},
         {"service", 's', 0, G_OPTION_ARG_NONE, &service, "Run as a service.", NULL},
-        {"verbose", 'v', 0, G_OPTION_ARG_NONE, &context.verbose, "Display more messages", NULL},
+        {"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Display more messages", NULL},
         {"clear", 0, 0, G_OPTION_ARG_NONE, &clear, "Remove all tracks in the iPod", NULL},
         {NULL}
     };
@@ -417,25 +414,25 @@ main(int argc, char **argv)
         goto out;
     }
 
-    context.connection = xmmsc_init ("ipod-syncer");
-    if (!xmmsc_connect (context.connection, getenv ("XMMS_PATH"))) {
+    connection = xmmsc_init ("ipod-syncer");
+    if (!xmmsc_connect (connection, getenv ("XMMS_PATH"))) {
         LOG_ERROR ("Failed to connect to xmms2 daemon, leaving.\n");
         ret = 1;
         goto out;
     }
 
-    context.itdb = itdb_parse (mountpoint, &err);
-    if (!context.itdb) {
+    itdb = itdb_parse (mountpoint, &err);
+    if (!itdb) {
         LOG_ERROR ("Failed to parse iPod database: %s\n", err->message);
         ret = 1;
         goto out;
     }
 
 #ifdef VOICEOVER
-    context.voiceover = voiceover_init (mountpoint);
+    voiceover = voiceover_init (mountpoint);
 #endif
 
-    if (clear && !clear_tracks (&context, &err)) {
+    if (clear && !clear_tracks (&err)) {
         LOG_ERROR ("Failed to clear tracks: %s\n", err->message);
         ret = 1;
         goto out;
@@ -443,16 +440,16 @@ main(int argc, char **argv)
 
     if (argc > 1) {
         query = g_strjoinv (" ", argv + 1);
-        run_query (query, &context);
+        run_query (query);
         g_free (query);
     }
 
     if (service) {
         /* FIXME: leaks */
-        context.mainloop = g_main_loop_new (NULL, FALSE);
-        xmmsc_mainloop_gmain_init (context.connection);
-        setup_service (&context);
-        g_main_loop_run (context.mainloop);
+        mainloop = g_main_loop_new (NULL, FALSE);
+        xmmsc_mainloop_gmain_init (connection);
+        setup_service ();
+        g_main_loop_run (mainloop);
     }
 
 out:
@@ -460,10 +457,10 @@ out:
     if (err) { g_error_free (err); err = NULL; }
 
     if (optc) g_option_context_free (optc);
-    if (context.connection) xmmsc_unref (context.connection);
-    if (context.itdb) itdb_free (context.itdb);
+    if (connection) xmmsc_unref (connection);
+    if (itdb) itdb_free (itdb);
 #ifdef VOICEOVER
-    if (context.voiceover) voiceover_deinit ();
+    if (voiceover) voiceover_deinit ();
 #endif
 
     return ret;
