@@ -55,7 +55,7 @@ static void import_track_properties (Itdb_Track *track, xmmsv_t *properties);
 static gchar *filepath_from_medialib_info (xmmsv_t *info);
 static void remove_track (Itdb_Track *track, context_t *context);
 static gboolean clear_tracks (context_t *context, GError **err);
-static Itdb_Track *sync_track (xmmsv_t *idv, context_t *context, GError **err);
+static Itdb_Track *sync_track (gint32 id, context_t *context, GError **err);
 static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
 static void run_query (const gchar *query, context_t *context);
 static void setup_service (context_t *context);
@@ -200,9 +200,8 @@ clear_tracks (context_t *context, GError **err)
  * It is the caller's responsibility to write the database back to the device.
  */
 static Itdb_Track *
-sync_track (xmmsv_t *idv, context_t *context, GError **err)
+sync_track (gint32 id, context_t *context, GError **err)
 {
-    gint32 id;
     xmmsc_result_t *res;
     xmmsv_t *properties;
     GError *tmp_err = NULL;
@@ -211,14 +210,6 @@ sync_track (xmmsv_t *idv, context_t *context, GError **err)
     Itdb_Playlist *mpl;
 
     gchar *filepath, *mp3path = NULL;
-
-    if (!xmmsv_get_int (idv, &id)) {
-        g_set_error_literal (err, 0, 0, "can't parse track id");
-        return NULL;
-    } else if (id <= 0) {
-        g_set_error_literal (err, 0, 0, "invalid track id");
-        return NULL;
-    }
 
     track = itdb_track_new ();
     mpl = itdb_playlist_mpl (context->itdb);
@@ -291,7 +282,8 @@ static xmmsv_t *
 sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 {
     Itdb_Track *t;
-    xmmsv_t *id;
+    xmmsv_t *idv;
+    gint32 id;
     xmmsv_list_iter_t *it;
     GError *err = NULL;
     GList *n, *tracks = NULL;
@@ -299,9 +291,15 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 
     xmmsv_get_list_iter (args, &it);
     while (xmmsv_list_iter_valid (it)) {
-        xmmsv_list_iter_entry (it, &id);
+        xmmsv_list_iter_entry (it, &idv);
 
-        if (!(t = sync_track (id, context, &err))) {
+        if (!xmmsv_get_int (idv, &id)) {
+            g_set_error_literal (&err, 0, 0, "can't parse track id");
+            break;
+        } else if (id <= 0) {
+            g_set_error_literal (&err, 0, 0, "invalid track id");
+            break;
+        } else if (!(t = sync_track (id, context, &err))) {
             break;
         }
 
