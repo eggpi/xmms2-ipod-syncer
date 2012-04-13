@@ -80,6 +80,7 @@ xmmsv_error_from_GError (const gchar *format, GError **err)
 
 /**
  * Import track properties from the medialib into an Itdb_Track.
+ * The file's path is assigned to the track's userdata field.
  */
 static gboolean
 import_track_properties (Itdb_Track *track, gint32 id, GError **err)
