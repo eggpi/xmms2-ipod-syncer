@@ -132,6 +132,10 @@ import_track_properties (Itdb_Track *track, gint32 id, GError **err)
     xmmsv_unref (properties);
 
     /* we need at least the path to proceed */
+    if (!track->userdata) {
+        g_set_error_literal (err, 0, 0, "can't determine path for track");
+    }
+
     return track->userdata != NULL;
 }
 
