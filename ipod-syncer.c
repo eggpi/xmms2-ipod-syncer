@@ -40,6 +40,9 @@
 #define LOG_ERROR(...) \
     g_fprintf (stderr, __VA_ARGS__);
 
+#define SET_ERROR(err, message) \
+    g_set_error_literal (err, g_quark_from_static_string (__func__), 0, message);
+
 static GMainLoop *mainloop;
 static gboolean verbose;
 static Itdb_iTunesDB *itdb;
@@ -92,7 +95,7 @@ import_track_properties (Itdb_Track *track, gint32 id, GError **err)
     xmmsc_result_wait (res);
 
     if (xmmsv_is_error (xmmsc_result_get_value (res))) {
-        g_set_error_literal (err, 0, 0, "failed to query track info");
+        SET_ERROR (err, "failed to query track info");
         return false;
     }
 
@@ -308,10 +311,10 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
         xmmsv_list_iter_entry (it, &idv);
 
         if (!xmmsv_get_int (idv, &id)) {
-            g_set_error_literal (&err, 0, 0, "can't parse track id");
+            SET_ERROR (&err, "can't parse track id");
             break;
         } else if (id <= 0) {
-            g_set_error_literal (&err, 0, 0, "invalid track id");
+            SET_ERROR (&err, "invalid track id");
             break;
         } else if (!(t = sync_track (id, &err))) {
             break;
