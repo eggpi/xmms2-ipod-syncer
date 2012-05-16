@@ -51,7 +51,7 @@ static gboolean voiceover;
 
 static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
 static gboolean import_track_properties (Itdb_Track *track, gint32 id, GError **err);
-static gchar *filepath_from_medialib_info (xmmsv_t *info);
+static gchar *filepath_from_medialib_info (xmmsv_t *info, GError **err);
 static void remove_track (Itdb_Track *track);
 static gboolean clear_tracks (GError **err);
 static Itdb_Track *sync_track (gint32 id, GError **err);
@@ -126,14 +126,14 @@ import_track_properties (Itdb_Track *track, gint32 id, GError **err)
     TRANSLATE_INT_PROPERTY(tracklen, "duration");
     TRANSLATE_INT_PROPERTY(track_nr, "tracknr");
 
-    track->userdata = (gpointer) filepath_from_medialib_info (properties);
+    track->userdata = (gpointer) filepath_from_medialib_info (properties, err);
 
     xmmsc_result_unref (res);
     xmmsv_unref (properties);
 
     /* we need at least the path to proceed */
     if (!track->userdata) {
-        g_set_error_literal (err, 0, 0, "can't determine path for track");
+        g_prefix_error (err, "can't determine track path: ");
     }
 
     return track->userdata != NULL;
@@ -143,7 +143,7 @@ import_track_properties (Itdb_Track *track, gint32 id, GError **err)
  * Helper function to extract a file's path from its medialib info.
  */
 static gchar *
-filepath_from_medialib_info (xmmsv_t *info)
+filepath_from_medialib_info (xmmsv_t *info, GError **err)
 {
     xmmsv_t *url;
     unsigned int len;
@@ -159,7 +159,7 @@ filepath_from_medialib_info (xmmsv_t *info)
 
     decoded = g_strndup ((const gchar *) buf, len);
 
-    filepath = g_filename_from_uri (decoded, NULL, NULL);
+    filepath = g_filename_from_uri (decoded, NULL, err);
     g_free (decoded);
 
     return filepath;
