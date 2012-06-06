@@ -1,6 +1,9 @@
 import os
 import commands
 
+SRCDIR = "src/"
+INCLUDEDIR = os.path.join(SRCDIR, "include")
+
 def CheckDeps():
     global env
     conf = Configure(env)
@@ -64,11 +67,13 @@ if not env.GetOption("clean"):
 if env.get("voiceover"):
     env.Append(CFLAGS = "-DVOICEOVER")
 
-syncer_node = env.Object("ipod-syncer.c")
-conversion_node = env.Object("conversion.c")
+env.Append(CFLAGS = "-I" + INCLUDEDIR)
+
+syncer_node = env.Object(os.path.join(SRCDIR, "ipod-syncer.c"))
+conversion_node = env.Object(os.path.join(SRCDIR, "conversion.c"))
 
 voiceover_node = []
 if env.GetOption("clean") or env["voiceover"]:
-    voiceover_node = env.Object("voiceover.c")
+    voiceover_node = env.Object(os.path.join(SRCDIR, "voiceover.c"))
 
-env.Program(syncer_node + voiceover_node + conversion_node)
+env.Program("ipod-syncer", syncer_node + voiceover_node + conversion_node)
