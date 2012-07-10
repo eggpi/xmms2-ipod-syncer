@@ -61,6 +61,7 @@ static Itdb_Track *sync_track (gint32 id, GError **err);
 static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
 static void run_query (const gchar *query);
 static void setup_service ();
+static gboolean confirm (const gchar *prompt);
 
 /**
  * Build a xmmsv_t error from a GError.
@@ -390,6 +391,18 @@ setup_service ()
     return;
 }
 
+static gboolean
+confirm (const gchar *prompt)
+{
+    char ans;
+
+    g_printf (prompt, "" /* suppress warning with dummy argument */);
+    g_printf (" [Y/n] ");
+
+    ans = tolower (getchar());
+    return ans == '\n' || ans == 'y';
+}
+
 int
 main(int argc, char **argv)
 {
@@ -440,10 +453,12 @@ main(int argc, char **argv)
     voiceover = voiceover_init (mountpoint);
 #endif
 
-    if (clear && !clear_tracks (&err)) {
-        LOG_ERROR ("Failed to clear tracks: %s\n", err->message);
-        ret = 1;
-        goto out;
+    if (clear && confirm ("Do you really wish to clear all tracks?")) {
+        if (!clear_tracks (&err)) {
+            LOG_ERROR ("Failed to clear tracks: %s\n", err->message);
+            ret = 1;
+            goto out;
+        }
     }
 
     if (argc > 1) {
