@@ -34,7 +34,11 @@ def CheckDeps():
 
     # pkg-config flags includes a whole lot more than we need for libgpod.
     # we are only really interested in the include dir for gpod itself
-    libgpod_CFLAGS = commands.getoutput("pkg-config --cflags-only-I libgpod-1.0")
+    fail, libgpod_CFLAGS = commands.getstatusoutput("pkg-config --cflags-only-I libgpod-1.0")
+    if fail:
+        print "ERROR: Can't find libgpod-1.0"
+        Exit(1)
+
     for include in libgpod_CFLAGS.split():
         if "gpod-1.0" in include:
             env.Append(CFLAGS = include)
