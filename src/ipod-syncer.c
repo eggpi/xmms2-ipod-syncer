@@ -372,7 +372,7 @@ run_query (const gchar *query)
 
     if (!xmmsv_coll_parse (query, &coll)) {
         LOG_ERROR ("Failed to parse query.\n");
-        return;
+        return false;
     }
 
     res = xmmsc_coll_query_ids (connection, coll, NULL, 0, 0);
