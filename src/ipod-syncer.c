@@ -59,7 +59,7 @@ static void remove_track (Itdb_Track *track);
 static gboolean clear_tracks (GError **err);
 static Itdb_Track *sync_track (gint32 id, GError **err);
 static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
-static void run_query (const gchar *query);
+static bool run_query (const gchar *query);
 static void setup_service ();
 static gboolean confirm (const gchar *prompt);
 
@@ -340,7 +340,7 @@ sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata)
 /**
  * Run a collection query and sync the resulting ids.
  */
-static void
+static bool
 run_query (const gchar *query)
 {
     xmmsv_t *idl, *err;
@@ -359,17 +359,17 @@ run_query (const gchar *query)
     idl = xmmsc_result_get_value (res);
     if (xmmsv_get_error (idl, &errstr)) {
         LOG_ERROR ("Failed to get collection: %s\n", errstr);
-    } else {
-        if ((err = sync_method (idl, NULL, NULL))) {
-            xmmsv_get_error (err, &errstr);
-            LOG_ERROR ("%s\n", errstr);
-        }
+        return false;
+    } else if ((err = sync_method (idl, NULL, NULL))) {
+        xmmsv_get_error (err, &errstr);
+        LOG_ERROR ("%s\n", errstr);
+        return false;
     }
 
     xmmsv_coll_unref (coll);
     xmmsc_result_unref (res);
 
-    return;
+    return true;
 }
 
 /**
@@ -463,7 +463,7 @@ main(int argc, char **argv)
 
     if (argc > 1) {
         query = g_strjoinv (" ", argv + 1);
-        run_query (query);
+        ret = !run_query (query);
         g_free (query);
     }
 
