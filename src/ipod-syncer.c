@@ -138,7 +138,11 @@ import_track_properties (Itdb_Track *track, gint32 id, GError **err)
     #define IMPORT_STRING_PROPERTY(name) TRANSLATE_STRING_PROPERTY(name, #name)
 
     #define TRANSLATE_INT_PROPERTY(name, key) \
-        xmmsv_dict_entry_get_int (properties, key, &track->name);
+        do { \
+            int32_t value; \
+            xmmsv_dict_entry_get_int (properties, key, &value); \
+            track->name = value; \
+        } while (0);
 
     #define IMPORT_INT_PROPERTY(name) TRANSLATE_INT_PROPERTY(name, #name)
 
