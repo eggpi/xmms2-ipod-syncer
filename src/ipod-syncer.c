@@ -52,6 +52,7 @@ static xmmsc_connection_t *connection;
 static gboolean voiceover;
 #endif
 
+static bool connect_with_autostart (void);
 static xmmsv_t *xmmsv_error_from_GError (const gchar *format, GError **err);
 static gboolean import_track_properties (Itdb_Track *track, gint32 id, GError **err);
 static gchar *filepath_from_medialib_info (xmmsv_t *info, GError **err);
@@ -62,6 +63,27 @@ static xmmsv_t *sync_method (xmmsv_t *args, xmmsv_t *kwargs, void *udata);
 static bool run_query (const gchar *query);
 static void setup_service ();
 static gboolean confirm (const gchar *prompt);
+
+/**
+ * Connect to the xmms2 daemon, starting it if needed.
+ * Sets the connection global variable.
+ */
+static bool connect_with_autostart (void) {
+    bool ret = FALSE;
+    const char *xmms2_path = getenv ("XMMS_PATH");
+
+    connection = xmmsc_init ("ipod-syncer");
+    if (!(ret = xmmsc_connect (connection, xmms2_path))) {
+        if (confirm ("Do you wish to launch the xmms2 server?") &&
+            !system ("xmms2-launcher")) {
+
+            ret = xmmsc_connect (connection, xmms2_path);
+        }
+    }
+
+    return ret;
+}
+
 
 /**
  * Build a xmmsv_t error from a GError.
@@ -435,8 +457,7 @@ main(int argc, char **argv)
         goto out;
     }
 
-    connection = xmmsc_init ("ipod-syncer");
-    if (!xmmsc_connect (connection, getenv ("XMMS_PATH"))) {
+    if (!connect_with_autostart ()) {
         LOG_ERROR ("Failed to connect to xmms2 daemon, leaving.\n");
         ret = 1;
         goto out;
