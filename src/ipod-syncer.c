@@ -16,6 +16,7 @@
  * along with ipod-syncer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <ctype.h>
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <glib/gstdio.h>
